@@ -7,9 +7,10 @@ import { syncToSheets } from "@/lib/integrations";
 import { Settings } from "@/lib/types";
 
 export function SettingsPanel() {
-  const { state, setState, syncStatus, syncNow } = usePlanner();
+  const { state, setState, projects, activeProjectId, syncStatus, syncNow } = usePlanner();
   const [message, setMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeProject = projects.find((project) => project.id === activeProjectId);
 
   function update(key: keyof typeof state.settings, value: string) {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
@@ -20,7 +21,7 @@ export function SettingsPanel() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "content-lab-integrations.json";
+    link.download = `content-lab-${activeProject?.name || "project"}-integrations.json`;
     link.click();
     URL.revokeObjectURL(url);
     setMessage("Настройки интеграций выгружены в JSON.");
@@ -53,6 +54,11 @@ export function SettingsPanel() {
 
   return (
     <div className="glass-panel premium-border rounded-xl p-5">
+      <div className="mb-5 border-b border-base-300 pb-4">
+        <div className="text-xs font-bold uppercase tracking-wide text-primary">Текущий проект</div>
+        <div className="mt-1 text-xl font-bold">{activeProject?.name || "Проект"}</div>
+        <p className="mt-1 text-sm text-neutral/55">Эти ключи и адреса используются только для выбранного проекта.</p>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="form-control">
           <span className="label-text mb-1 font-semibold">Google Spreadsheet ID</span>

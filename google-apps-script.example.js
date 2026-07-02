@@ -11,7 +11,7 @@ const HEADERS = {
   [SHEETS.audience]: ["ID", "Сегмент", "Описание", "Ступень Ханта", "Боли", "Слова клиента"],
   [SHEETS.rubrics]: ["ID", "Рубрика", "Задача", "Функция", "Форматы", "Сегмент", "Активна"],
   [SHEETS.ideas]: ["ID", "ЦА", "Источник", "Фраза клиента", "Скрытая боль", "Смысл", "Тема", "Формат", "Рубрика", "Хант", "Функция"],
-  [SHEETS.publications]: ["ID", "Дата", "Время", "День недели", "Площадка", "ЦА", "Рубрика", "Функция", "Формат", "Тема", "Тезисы", "CTA", "Оффер", "Статус"]
+  [SHEETS.publications]: ["ID", "Дата", "Время", "День недели", "Площадка", "ЦА", "Рубрика", "Функция", "Формат", "Тема", "Крючок захвата внимания", "Тезисы", "CTA", "Оффер", "Статус"]
 };
 
 function doPost(e) {
@@ -33,7 +33,7 @@ function sync_(state) {
   writeRows_(spreadsheet, SHEETS.audience, state.audience.map((x) => [x.id, x.name, x.description, x.huntStage, x.pains, x.clientWords]));
   writeRows_(spreadsheet, SHEETS.rubrics, state.rubrics.map((x) => [x.id, x.name, x.task, x.functionType, x.formats, x.segment, x.active]));
   writeRows_(spreadsheet, SHEETS.ideas, state.ideas.map((x) => [x.id, x.audience, x.source, x.clientPhrase, x.hiddenPain, x.meaning, x.topic, x.format, x.rubric, x.huntStage, x.functionType]));
-  writeRows_(spreadsheet, SHEETS.publications, state.publications.map((x) => [x.id, x.publishDate, x.publishTime, x.weekday, x.platform, x.audience, x.rubric, x.functionType, x.format, x.topic, x.theses, x.cta, x.offer, x.status]));
+  writeRows_(spreadsheet, SHEETS.publications, state.publications.map((x) => [x.id, x.publishDate, x.publishTime, x.weekday, x.platform, x.audience, x.rubric, x.functionType, x.format, x.topic, x.hook, x.theses, x.cta, x.offer, x.status]));
   return { ok: true };
 }
 
@@ -54,6 +54,7 @@ function createCalendarEvent_(calendarId, publication) {
       `Площадка: ${publication.platform}`,
       `Рубрика: ${publication.rubric}`,
       `Формат: ${publication.format}`,
+      `Крючок: ${publication.hook}`,
       `ЦА: ${publication.audience}`,
       `CTA: ${publication.cta}`,
       "",

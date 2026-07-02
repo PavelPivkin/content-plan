@@ -32,23 +32,23 @@ export default function ProductEditPage() {
       />
       <FormCard>
         <div className="grid gap-5 lg:grid-cols-2">
-          <EditableField label="Название продукта" value={product.name} onChange={(v) => update("name", v)} multiline={false} prompt="Короткое понятное имя продукта или услуги." />
+          <EditableField label="Название продукта" value={product.name} onChange={(v) => update("name", v)} multiline={false} prompt="Короткое понятное имя продукта или услуги." entityContext={{ entity: "product", product }} />
           <div className="lg:col-span-2">
             <div className="mb-1 flex items-center gap-2">
               <span className="font-semibold">Позиционирование</span>
               <Help id="positioning" />
             </div>
-            <EditableField label="" value={product.positioning} onChange={(v) => update("positioning", v)} prompt="Для кого, какую проблему, каким методом и почему это важно." />
+            <EditableField label="" value={product.positioning} onChange={(v) => update("positioning", v)} prompt="Для кого, какую проблему, каким методом и почему это важно." entityContext={{ entity: "product", product }} />
           </div>
           <div className="lg:col-span-2">
             <div className="mb-1 flex items-center gap-2">
               <span className="font-semibold">УТП</span>
               <Help id="offer" />
             </div>
-            <EditableField label="" value={product.usp} onChange={(v) => update("usp", v)} prompt="Что делаем сильнее, быстрее, безопаснее или понятнее конкурентов." />
+            <EditableField label="" value={product.usp} onChange={(v) => update("usp", v)} prompt="Что делаем сильнее, быстрее, безопаснее или понятнее конкурентов." entityContext={{ entity: "product", product }} />
           </div>
-          <EditableField label="Отстройка от конкурентов" value={product.competitorPositioning} onChange={(v) => update("competitorPositioning", v)} prompt="Какие старые подходы не работают, чем ваш метод отличается." />
-          <EditableField label="Оффер на текущий период" value={product.offer} onChange={(v) => update("offer", v)} prompt="Проблема, результат, гарантия, уникальность и почему сейчас." />
+          <EditableField label="Отстройка от конкурентов" value={product.competitorPositioning} onChange={(v) => update("competitorPositioning", v)} prompt="Какие старые подходы не работают, чем ваш метод отличается." entityContext={{ entity: "product", product }} />
+          <EditableField label="Оффер на текущий период" value={product.offer} onChange={(v) => update("offer", v)} prompt="Проблема, результат, гарантия, уникальность и почему сейчас." entityContext={{ entity: "product", product }} />
         </div>
       </FormCard>
     </>

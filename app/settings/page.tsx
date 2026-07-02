@@ -8,7 +8,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Интеграции"
-        subtitle="Подключите Google Sheets, Google Calendar и OpenAI. Данные сохраняются локально, пока интеграции не настроены."
+        subtitle="Подключите Google Sheets, Google Calendar и OpenAI для активного проекта. У каждого проекта свой набор интеграций."
       />
       <SettingsPanel />
     </>

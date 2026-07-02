@@ -2,7 +2,8 @@
 
 import { addDays, formatISO } from "date-fns";
 import Link from "next/link";
-import { CalendarPlus, Plus, Wand2 } from "lucide-react";
+import { CalendarPlus, Plus } from "lucide-react";
+import { AiGenerateButton } from "@/components/AiGenerateButton";
 import { DataTable } from "@/components/DataTable";
 import { Help } from "@/components/Help";
 import { PageHeader } from "@/components/PageHeader";
@@ -10,22 +11,28 @@ import { formats } from "@/lib/theory";
 import { createCalendarTask, weekday } from "@/lib/integrations";
 import { usePlanner } from "@/lib/store";
 import { Publication } from "@/lib/types";
-import { generateWithOpenAI } from "@/lib/ai";
+import { generateWithOpenAI, getGeneratedRows } from "@/lib/ai";
 
 export default function PlanPage() {
   const { state, setState } = usePlanner();
+  const sortedPublications = [...state.publications].sort((a, b) => {
+    const left = `${a.publishDate || "9999-12-31"}T${a.publishTime || "23:59"}`;
+    const right = `${b.publishDate || "9999-12-31"}T${b.publishTime || "23:59"}`;
+    return left.localeCompare(right);
+  });
 
   function add(row?: Partial<Publication>) {
     const date = row?.publishDate || formatISO(addDays(new Date(), state.publications.length), { representation: "date" });
+    const { id: _id, ...safeRow } = row || {};
     setState((prev) => ({
       ...prev,
-      publications: [...prev.publications, { id: crypto.randomUUID(), publishDate: date, publishTime: "10:00", weekday: weekday(date), platform: "Instagram", audience: prev.audience[0]?.name || "", rubric: "", functionType: "Польза", format: "Пост", topic: "", theses: "", cta: "", offer: prev.product.offer, status: "Черновик", ...row }]
+      publications: [...prev.publications, { ideaId: "", publishDate: date, publishTime: "10:00", weekday: weekday(date), platform: "Instagram", audience: prev.audience[0]?.name || "", rubric: "", functionType: "Польза", format: "Пост", topic: "", hook: "", theses: "", cta: "", offer: prev.product.offer, status: "Черновик", ...safeRow, id: crypto.randomUUID() }]
     }));
   }
 
-  async function autoFill() {
-    const rows = await generateWithOpenAI({ state, task: "Сгенерируй контент план с балансом функций", count: 14 });
-    rows.forEach((row: Partial<Publication>, index: number) => {
+  async function autoFill(count: number) {
+    const result = await generateWithOpenAI({ state, task: "Сгенерируй контент план с балансом функций. Темы бери из банка идей, если он заполнен, и разворачивай их в конкретные публикации.", count });
+    getGeneratedRows<Publication>(result, ["publications", "plan", "contentPlan", "контентПлан"]).forEach((row, index) => {
       const date = formatISO(addDays(new Date(), index), { representation: "date" });
       add({ publishDate: date, weekday: weekday(date), ...row });
     });
@@ -43,7 +50,7 @@ export default function PlanPage() {
         subtitle="Разложите идеи по датам, площадкам и форматам. День недели считается автоматически, а запланированные публикации можно отправлять в Google Calendar."
         actions={
           <>
-            <button className="btn btn-outline rounded-lg gap-2" onClick={autoFill}><Wand2 size={16} />+14 с ИИ</button>
+            <AiGenerateButton defaultCount={3} max={60} onGenerate={autoFill} />
             <button className="btn btn-outline rounded-lg gap-2" onClick={calendarForFirstReady}><CalendarPlus size={16} />В календарь</button>
             <Link className="btn btn-primary rounded-lg gap-2" href="/plan/edit"><Plus size={16} />Добавить</Link>
           </>
@@ -54,22 +61,17 @@ export default function PlanPage() {
         <Help id="balance" />
       </div>
       <DataTable
-        rows={state.publications}
+        rows={sortedPublications}
         columns={[
-          { key: "publishDate", label: "Дата" },
-          { key: "publishTime", label: "Время" },
-          { key: "weekday", label: "День" },
-          { key: "platform", label: "Площадка", tone: "neutral" },
-          { key: "audience", label: "ЦА", tone: "primary" },
+          { key: "topic", label: "Тема", render: (value) => <span className="line-clamp-3 whitespace-pre-wrap font-bold text-neutral">{String(value || "—")}</span> },
           { key: "rubric", label: "Рубрика" },
           { key: "functionType", label: "Функция", tone: "secondary" },
-          { key: "format", label: "Формат", tone: "accent" },
-          { key: "topic", label: "Тема" },
-          { key: "theses", label: "Тезисы" },
-          { key: "cta", label: "CTA" },
-          { key: "offer", label: "Оффер" },
-          { key: "status", label: "Статус", tone: "primary" }
+          { key: "audience", label: "ЦА", tone: "primary" },
+          { key: "status", label: "Статус", tone: "primary" },
+          { key: "publishDate", label: "Дата" },
+          { key: "publishTime", label: "Время" }
         ]}
+        viewHref={(id) => `/plan/view?id=${id}`}
         editHref={(id) => `/plan/edit?id=${id}`}
         onDelete={(id) => setState((prev) => ({ ...prev, publications: prev.publications.filter((row) => row.id !== id) }))}
       />

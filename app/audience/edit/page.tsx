@@ -40,7 +40,7 @@ export default function AudienceEditPage() {
   async function fillWithAi() {
     const result = await generateWithOpenAI({
       state,
-      task: "Сгенерируй один сегмент ЦА как JSON объект с полями name, description, huntStage, pains, clientWords",
+      task: `Сгенерируй или дополни один сегмент ЦА как JSON объект с полями name, description, huntStage, pains, clientWords. Учитывай уже заполненные поля текущего сегмента: ${JSON.stringify(item)}`,
       count: 1
     });
     const next = Array.isArray(result) ? result[0] : result;
@@ -71,17 +71,17 @@ export default function AudienceEditPage() {
       />
       <FormCard>
         <div className="grid gap-5 lg:grid-cols-2">
-          <EditableField label="Название сегмента" value={item.name} onChange={(v) => update("name", v)} multiline={false} prompt="Коротко назови сегмент целевой аудитории." />
+          <EditableField label="Название сегмента" value={item.name} onChange={(v) => update("name", v)} multiline={false} prompt="Коротко назови сегмент целевой аудитории." entityContext={{ entity: "audienceSegment", segment: item, product: state.product }} />
           <label className="form-control">
             <div className="label"><FieldLabel>Ступень Ханта</FieldLabel></div>
             <select className="select select-bordered rounded-lg" value={item.huntStage} onChange={(e) => update("huntStage", e.target.value)}>
               {huntStages.map((stage) => <option key={stage}>{stage}</option>)}
             </select>
           </label>
-          <EditableField label="Описание сегмента" value={item.description} onChange={(v) => update("description", v)} prompt="Кто эти люди, в какой ситуации находятся, что уже пробовали." />
-          <EditableField label="Боли / желания" value={item.pains} onChange={(v) => update("pains", v)} prompt="Что болит, чего хочет сегмент, чего боится." />
+          <EditableField label="Описание сегмента" value={item.description} onChange={(v) => update("description", v)} prompt="Кто эти люди, в какой ситуации находятся, что уже пробовали." entityContext={{ entity: "audienceSegment", segment: item, product: state.product }} />
+          <EditableField label="Боли / желания" value={item.pains} onChange={(v) => update("pains", v)} prompt="Что болит, чего хочет сегмент, чего боится." entityContext={{ entity: "audienceSegment", segment: item, product: state.product }} />
           <div className="lg:col-span-2">
-            <EditableField label="Слова клиента" value={item.clientWords} onChange={(v) => update("clientWords", v)} prompt="Живые фразы клиента, возражения, вопросы, бытовые формулировки." />
+            <EditableField label="Слова клиента" value={item.clientWords} onChange={(v) => update("clientWords", v)} prompt="Живые фразы клиента, возражения, вопросы, бытовые формулировки." entityContext={{ entity: "audienceSegment", segment: item, product: state.product }} />
           </div>
         </div>
       </FormCard>

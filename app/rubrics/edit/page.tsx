@@ -39,7 +39,7 @@ export default function RubricEditPage() {
   }
 
   async function fillWithAi() {
-    const result = await generateWithOpenAI({ state, task: "Сгенерируй одну рубрику как JSON объект с полями name, task, functionType, formats, segment, active", count: 1 });
+    const result = await generateWithOpenAI({ state, task: `Сгенерируй или дополни одну рубрику как JSON объект с полями name, task, functionType, formats, segment, active. Учитывай уже заполненные поля текущей рубрики: ${JSON.stringify(item)}`, count: 1 });
     const next = Array.isArray(result) ? result[0] : result;
     if (next) setItem((prev) => ({ ...prev, ...next }));
   }
@@ -68,7 +68,7 @@ export default function RubricEditPage() {
       />
       <FormCard>
         <div className="grid gap-5 lg:grid-cols-2">
-          <EditableField label="Название рубрики" value={item.name} onChange={(v) => update("name", v)} multiline={false} prompt="Название регулярного смыслового контейнера." />
+          <EditableField label="Название рубрики" value={item.name} onChange={(v) => update("name", v)} multiline={false} prompt="Название регулярного смыслового контейнера." entityContext={{ entity: "rubric", rubric: item, product: state.product, audience: state.audience }} />
           <label className="form-control">
             <div className="label"><FieldLabel>Функция</FieldLabel></div>
             <select className="select select-bordered rounded-lg" value={item.functionType} onChange={(e) => update("functionType", e.target.value)}>
@@ -87,7 +87,7 @@ export default function RubricEditPage() {
             <input type="checkbox" className="toggle toggle-primary" checked={item.active} onChange={(e) => update("active", e.target.checked)} />
           </label>
           <div className="lg:col-span-2">
-            <EditableField label="Задача рубрики" value={item.task} onChange={(v) => update("task", v)} prompt="Зачем нужна рубрика, какой смысл и реакцию она формирует." />
+            <EditableField label="Задача рубрики" value={item.task} onChange={(v) => update("task", v)} prompt="Зачем нужна рубрика, какой смысл и реакцию она формирует." entityContext={{ entity: "rubric", rubric: item, product: state.product, audience: state.audience }} />
           </div>
           <div className="lg:col-span-2">
             <div className="label"><FieldLabel>Форматы</FieldLabel></div>

@@ -45,6 +45,7 @@ export type Idea = {
 
 export type Publication = {
   id: string;
+  ideaId: string;
   publishDate: string;
   publishTime: string;
   weekday: string;
@@ -54,6 +55,7 @@ export type Publication = {
   functionType: FunctionType;
   format: string;
   topic: string;
+  hook: string;
   theses: string;
   cta: string;
   offer: string;
@@ -76,4 +78,18 @@ export type PlannerState = {
   ideas: Idea[];
   publications: Publication[];
   settings: Settings;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  state: PlannerState;
+};
+
+export type Workspace = {
+  version: 2;
+  activeProjectId: string;
+  projects: Project[];
 };

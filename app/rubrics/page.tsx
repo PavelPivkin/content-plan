@@ -1,29 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Wand2 } from "lucide-react";
+import { Plus } from "lucide-react";
+import { AiGenerateButton } from "@/components/AiGenerateButton";
 import { DataTable } from "@/components/DataTable";
 import { Help } from "@/components/Help";
 import { PageHeader } from "@/components/PageHeader";
 import { formats } from "@/lib/theory";
 import { usePlanner } from "@/lib/store";
 import { Rubric } from "@/lib/types";
-import { generateWithOpenAI } from "@/lib/ai";
+import { generateWithOpenAI, getGeneratedRows } from "@/lib/ai";
 import { TagList } from "@/components/FormCard";
 
 export default function RubricsPage() {
   const { state, setState } = usePlanner();
 
   function add(row?: Partial<Rubric>) {
+    const { id: _id, ...safeRow } = row || {};
     setState((prev) => ({
       ...prev,
-      rubrics: [...prev.rubrics, { id: crypto.randomUUID(), name: "", task: "", functionType: "Польза", formats: formats.slice(0, 2).join(", "), segment: "", active: true, ...row }]
+      rubrics: [...prev.rubrics, { name: "", task: "", functionType: "Польза", formats: formats.slice(0, 2).join(", "), segment: "", active: true, ...safeRow, id: crypto.randomUUID() }]
     }));
   }
 
-  async function autoFill() {
-    const rows = await generateWithOpenAI({ state, task: "Сгенерируй рубрики для контент-системы", count: 5 });
-    rows.forEach((row: Partial<Rubric>) => add(row));
+  async function autoFill(count: number) {
+    const result = await generateWithOpenAI({ state, task: "Сгенерируй рубрики для контент-системы", count });
+    getGeneratedRows<Rubric>(result, ["rubrics", "рубрики"]).forEach((row) => add(row));
   }
 
   return (
@@ -33,7 +35,7 @@ export default function RubricsPage() {
         subtitle="Соберите повторяемые смысловые контейнеры. У каждой рубрики должна быть задача, функция и набор рабочих форматов."
         actions={
           <>
-            <button className="btn btn-outline rounded-lg gap-2" onClick={autoFill}><Wand2 size={16} />+5 с ИИ</button>
+            <AiGenerateButton defaultCount={3} max={20} onGenerate={autoFill} />
             <Link className="btn btn-primary rounded-lg gap-2" href="/rubrics/edit"><Plus size={16} />Добавить</Link>
           </>
         }

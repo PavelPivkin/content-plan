@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
 import clsx from "clsx";
 
@@ -14,16 +15,19 @@ type Column<T> = {
 export function DataTable<T extends { id: string }>({
   rows,
   columns,
+  viewHref,
   editHref,
   onDelete,
   emptyText = "Пока нет записей"
 }: {
   rows: T[];
   columns: Column<T>[];
+  viewHref?: (id: string) => string;
   editHref: (id: string) => string;
   onDelete: (id: string) => void;
   emptyText?: string;
 }) {
+  const router = useRouter();
   const badgeTone = {
     primary: "badge-primary",
     secondary: "badge-secondary",
@@ -67,6 +71,7 @@ export function DataTable<T extends { id: string }>({
                   <button className="btn btn-ghost btn-xs rounded-lg text-error" onClick={() => onDelete(row.id)} title="Удалить"><Trash2 size={14} /></button>
                 </div>
               </div>
+              {viewHref && <Link className="mt-3 block text-sm font-semibold text-primary" href={viewHref(row.id)}>Открыть превью</Link>}
               {badgeColumns.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {badgeColumns.map((column) => <span key={String(column.key)}>{renderValue(column, row)}</span>)}
@@ -101,14 +106,14 @@ export function DataTable<T extends { id: string }>({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="hover">
+                <tr key={row.id} className={clsx("hover", viewHref && "cursor-pointer")} onClick={() => viewHref && router.push(viewHref(row.id))}>
                   {columns.map((column) => (
                     <td key={String(column.key)} className="max-w-72 align-top text-sm">
                       {renderValue(column, row)}
                     </td>
                   ))}
                   <td>
-                    <div className="flex justify-end gap-1">
+                    <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
                       <Link className="btn btn-ghost btn-xs rounded-lg" href={editHref(row.id)} title="Редактировать"><Pencil size={15} /></Link>
                       <button className="btn btn-ghost btn-xs rounded-lg text-error" onClick={() => onDelete(row.id)} title="Удалить">
                         <Trash2 size={15} />

@@ -43,7 +43,7 @@ export default function IdeaEditPage() {
   }
 
   async function fillWithAi() {
-    const result = await generateWithOpenAI({ state, task: "Сгенерируй одну идею контента как JSON объект с полями audience, source, clientPhrase, hiddenPain, meaning, topic, format, rubric, huntStage, functionType", count: 1 });
+    const result = await generateWithOpenAI({ state, task: `Сгенерируй или дополни одну идею контента как JSON объект с полями audience, source, clientPhrase, hiddenPain, meaning, topic, format, rubric, huntStage, functionType. Учитывай уже заполненные поля текущей идеи: ${JSON.stringify(item)}. Например, из clientPhrase можно вычленить hiddenPain, из hiddenPain и topic сформулировать meaning.`, count: 1 });
     const next = Array.isArray(result) ? result[0] : result;
     if (next) setItem((prev) => ({ ...prev, ...next }));
   }
@@ -69,8 +69,8 @@ export default function IdeaEditPage() {
       />
       <FormCard>
         <div className="grid gap-5 lg:grid-cols-2">
-          <EditableField label="Где нашли" value={item.source} onChange={(v) => update("source", v)} multiline={false} prompt="Источник идеи: форум, отзыв, комментарий, гипотеза." />
-          <EditableField label="Тема / заголовок" value={item.topic} onChange={(v) => update("topic", v)} multiline={false} prompt="Тема, которая превращает смысл в публикацию." />
+          <EditableField label="Где нашли" value={item.source} onChange={(v) => update("source", v)} multiline={false} prompt="Источник идеи: форум, отзыв, комментарий, гипотеза." entityContext={{ entity: "idea", idea: item, product: state.product, audience: state.audience, rubrics: state.rubrics }} />
+          <EditableField label="Тема / заголовок" value={item.topic} onChange={(v) => update("topic", v)} multiline={false} prompt="Тема, которая превращает смысл в публикацию." entityContext={{ entity: "idea", idea: item, product: state.product, audience: state.audience, rubrics: state.rubrics }} />
           <label className="form-control">
             <div className="label"><FieldLabel>ЦА</FieldLabel></div>
             <select className="select select-bordered rounded-lg" value={item.audience} onChange={(e) => update("audience", e.target.value)}>
@@ -78,9 +78,9 @@ export default function IdeaEditPage() {
               {state.audience.map((segment) => <option key={segment.id} value={segment.name}>{segment.name || "Без названия"}</option>)}
             </select>
           </label>
-          <EditableField label="Фраза клиента" value={item.clientPhrase} onChange={(v) => update("clientPhrase", v)} prompt="Живая формулировка боли или желания клиента." />
-          <EditableField label="Скрытая боль" value={item.hiddenPain} onChange={(v) => update("hiddenPain", v)} prompt="Что на самом деле стоит за словами клиента." />
-          <EditableField label="Смысл" value={item.meaning} onChange={(v) => update("meaning", v)} prompt="Какой вывод должен остаться после контента." />
+          <EditableField label="Фраза клиента" value={item.clientPhrase} onChange={(v) => update("clientPhrase", v)} prompt="Живая формулировка боли или желания клиента." entityContext={{ entity: "idea", idea: item, product: state.product, audience: state.audience, rubrics: state.rubrics }} />
+          <EditableField label="Скрытая боль" value={item.hiddenPain} onChange={(v) => update("hiddenPain", v)} prompt="Что на самом деле стоит за словами клиента." entityContext={{ entity: "idea", idea: item, product: state.product, audience: state.audience, rubrics: state.rubrics }} />
+          <EditableField label="Смысл" value={item.meaning} onChange={(v) => update("meaning", v)} prompt="Какой вывод должен остаться после контента." entityContext={{ entity: "idea", idea: item, product: state.product, audience: state.audience, rubrics: state.rubrics }} />
           <div className="grid gap-4">
             <label className="form-control">
               <div className="label"><FieldLabel>Рубрика</FieldLabel></div>

@@ -1,16 +1,24 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { defaultState } from "./defaults";
-import { PlannerState } from "./types";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createDefaultState, defaultState } from "./defaults";
+import { PlannerState, Project, Workspace } from "./types";
 import { syncToSheets } from "./integrations";
 
-const STORAGE_KEY = "content-marketing-planner:v1";
+const LEGACY_STORAGE_KEY = "content-marketing-planner:v1";
+const WORKSPACE_STORAGE_KEY = "content-marketing-planner:workspace:v2";
 const AUTOSYNC_INTERVAL_MS = 30000;
 
 type Store = {
   state: PlannerState;
   setState: React.Dispatch<React.SetStateAction<PlannerState>>;
+  projects: Project[];
+  activeProjectId: string;
+  createProject: (name: string) => string;
+  switchProject: (id: string) => void;
+  renameProject: (id: string, name: string) => void;
+  duplicateProject: (id: string) => void;
+  deleteProject: (id: string) => void;
   reset: () => void;
   syncStatus: {
     dirty: boolean;
@@ -23,58 +31,213 @@ type Store = {
 
 const StoreContext = createContext<Store | null>(null);
 
+function mergeStoredState(stored: Partial<PlannerState>): PlannerState {
+  const publications = stored.publications?.map((publication) => ({
+    ...publication,
+    ideaId: publication.ideaId || "",
+    hook: publication.hook || ""
+  }));
+
+  return {
+    ...defaultState,
+    ...stored,
+    product: { ...defaultState.product, ...stored.product },
+    settings: { ...defaultState.settings, ...stored.settings },
+    audience: stored.audience || createDefaultState().audience,
+    rubrics: stored.rubrics || createDefaultState().rubrics,
+    ideas: stored.ideas || [],
+    publications: publications || []
+  };
+}
+
+function makeProject(name: string, state = createDefaultState(), id = crypto.randomUUID()): Project {
+  const now = new Date().toISOString();
+  return { id, name: name.trim() || "Новый проект", createdAt: now, updatedAt: now, state };
+}
+
+function initialWorkspace(): Workspace {
+  const project = makeProject("Основной проект", createDefaultState(), "project-default");
+  return { version: 2, activeProjectId: project.id, projects: [project] };
+}
+
+function parseWorkspace(raw: string): Workspace | null {
+  const parsed = JSON.parse(raw) as Partial<Workspace>;
+  if (parsed.version !== 2 || !Array.isArray(parsed.projects) || parsed.projects.length === 0) return null;
+
+  const projects = parsed.projects.map((project) => ({
+    ...project,
+    name: project.name || "Проект",
+    state: mergeStoredState(project.state || {})
+  })) as Project[];
+  const activeProjectId = projects.some((project) => project.id === parsed.activeProjectId)
+    ? parsed.activeProjectId as string
+    : projects[0].id;
+
+  return { version: 2, activeProjectId, projects };
+}
+
+function cloneState(state: PlannerState): PlannerState {
+  return JSON.parse(JSON.stringify(state)) as PlannerState;
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<PlannerState>(defaultState);
+  const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace);
   const [hydrated, setHydrated] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState("");
-  const [error, setError] = useState("");
+  const [dirtyProjectIds, setDirtyProjectIds] = useState<Set<string>>(new Set());
+  const [syncingProjectId, setSyncingProjectId] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const activeProject = workspace.projects.find((project) => project.id === workspace.activeProjectId) || workspace.projects[0];
+  const state = activeProject?.state || defaultState;
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) setState({ ...defaultState, ...JSON.parse(raw) });
-    setHydrated(true);
+    try {
+      const workspaceRaw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      const storedWorkspace = workspaceRaw ? parseWorkspace(workspaceRaw) : null;
+      if (storedWorkspace) {
+        setWorkspace(storedWorkspace);
+      } else {
+        const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacyRaw) {
+          const legacyState = mergeStoredState(JSON.parse(legacyRaw));
+          const project = makeProject(legacyState.product.name || "Основной проект", legacyState);
+          setWorkspace({ version: 2, activeProjectId: project.id, projects: [project] });
+        }
+      }
+    } catch {
+      // Keep the safe initial workspace if local data cannot be parsed.
+    } finally {
+      setHydrated(true);
+    }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (hydrated) setDirty(true);
-  }, [state, hydrated]);
+    if (!hydrated) return;
+    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspace));
+  }, [workspace, hydrated]);
 
-  async function syncNow() {
-    if (!state.settings.appsScriptUrl || syncing) return;
-    setSyncing(true);
-    setError("");
+  const setState = useCallback<React.Dispatch<React.SetStateAction<PlannerState>>>(
+    (action) => {
+      const projectId = workspace.activeProjectId;
+      setWorkspace((prev) => ({
+        ...prev,
+        projects: prev.projects.map((project) => {
+          if (project.id !== projectId) return project;
+          const nextState = typeof action === "function"
+            ? (action as (prevState: PlannerState) => PlannerState)(project.state)
+            : action;
+          return { ...project, state: nextState, updatedAt: new Date().toISOString() };
+        })
+      }));
+      setDirtyProjectIds((prev) => new Set(prev).add(projectId));
+    },
+    [workspace.activeProjectId]
+  );
+
+  function createProject(name: string) {
+    const project = makeProject(name);
+    setWorkspace((prev) => ({ ...prev, activeProjectId: project.id, projects: [...prev.projects, project] }));
+    return project.id;
+  }
+
+  function switchProject(id: string) {
+    if (!workspace.projects.some((project) => project.id === id)) return;
+    setWorkspace((prev) => ({ ...prev, activeProjectId: id }));
+  }
+
+  function renameProject(id: string, name: string) {
+    const nextName = name.trim();
+    if (!nextName) return;
+    setWorkspace((prev) => ({
+      ...prev,
+      projects: prev.projects.map((project) => project.id === id ? { ...project, name: nextName, updatedAt: new Date().toISOString() } : project)
+    }));
+  }
+
+  function duplicateProject(id: string) {
+    const source = workspace.projects.find((project) => project.id === id);
+    if (!source) return;
+    const project = makeProject(`${source.name} — копия`, cloneState(source.state));
+    setWorkspace((prev) => ({ ...prev, activeProjectId: project.id, projects: [...prev.projects, project] }));
+  }
+
+  function deleteProject(id: string) {
+    if (workspace.projects.length <= 1) return;
+    setWorkspace((prev) => {
+      const projects = prev.projects.filter((project) => project.id !== id);
+      return {
+        ...prev,
+        projects,
+        activeProjectId: prev.activeProjectId === id ? projects[0].id : prev.activeProjectId
+      };
+    });
+    setDirtyProjectIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  async function syncProject(projectId: string) {
+    const project = workspace.projects.find((candidate) => candidate.id === projectId);
+    if (!project?.state.settings.appsScriptUrl || syncingProjectId) return;
+    setSyncingProjectId(projectId);
+    setErrors((prev) => ({ ...prev, [projectId]: "" }));
     try {
-      await syncToSheets(state);
-      setDirty(false);
-      setLastSyncedAt(new Date().toLocaleString("ru-RU"));
+      await syncToSheets(project.state);
+      setDirtyProjectIds((prev) => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+      setLastSyncedAt((prev) => ({ ...prev, [projectId]: new Date().toLocaleString("ru-RU") }));
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "Ошибка автосинхронизации");
+      setErrors((prev) => ({
+        ...prev,
+        [projectId]: syncError instanceof Error ? syncError.message : "Ошибка автосинхронизации"
+      }));
     } finally {
-      setSyncing(false);
+      setSyncingProjectId("");
     }
   }
 
+  async function syncNow() {
+    await syncProject(workspace.activeProjectId);
+  }
+
+  const activeDirty = dirtyProjectIds.has(workspace.activeProjectId);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (dirty && state.settings.appsScriptUrl && !syncing) {
-        void syncNow();
-      }
+      if (syncingProjectId) return;
+      const nextProject = workspace.projects.find((project) => dirtyProjectIds.has(project.id) && project.state.settings.appsScriptUrl);
+      if (nextProject) void syncProject(nextProject.id);
     }, AUTOSYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [dirty, state, syncing]);
+  }, [dirtyProjectIds, syncingProjectId, workspace]);
 
-  const value = useMemo(
+  const value = useMemo<Store>(
     () => ({
       state,
       setState,
-      reset: () => setState(defaultState),
-      syncStatus: { dirty, syncing, lastSyncedAt, error },
+      projects: workspace.projects,
+      activeProjectId: workspace.activeProjectId,
+      createProject,
+      switchProject,
+      renameProject,
+      duplicateProject,
+      deleteProject,
+      reset: () => setState(createDefaultState()),
+      syncStatus: {
+        dirty: activeDirty,
+        syncing: syncingProjectId === workspace.activeProjectId,
+        lastSyncedAt: lastSyncedAt[workspace.activeProjectId] || "",
+        error: errors[workspace.activeProjectId] || ""
+      },
       syncNow
     }),
-    [state, dirty, syncing, lastSyncedAt, error]
+    [state, setState, workspace, activeDirty, syncingProjectId, lastSyncedAt, errors]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

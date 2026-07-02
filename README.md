@@ -18,3 +18,20 @@ npm run dev -- -p 3001
 - Запись в Sheets и создание событий Calendar из статического клиента лучше делать через Google Apps Script Web App. Шаблон лежит в `google-apps-script.example.js`.
 
 В Apps Script нужно привязать скрипт к нужной таблице, вставить код из шаблона, развернуть Web App и добавить его URL в приложении.
+
+## GitHub Pages
+
+Публикация выполняется автоматически из ветки `main` через GitHub Actions:
+
+https://pavelpivkin.github.io/content-plan/
+
+## План по Apps Script
+
+Сейчас каждый развернутый Apps Script привязан к одной Google-таблице через `SpreadsheetApp.getActive()`. Поэтому для разных проектов используются разные Web App URL.
+
+Позже можно перейти на один общий Apps Script:
+
+1. Передавать `spreadsheetId` активного проекта в каждом запросе.
+2. Открывать таблицу через `SpreadsheetApp.openById(spreadsheetId)`.
+3. Проверять доступ и допустимый формат идентификатора до чтения или записи.
+4. Добавить загрузку состояния проекта из таблицы, а не только отправку изменений.

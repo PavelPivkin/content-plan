@@ -1,26 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Wand2 } from "lucide-react";
+import { Plus } from "lucide-react";
+import { AiGenerateButton } from "@/components/AiGenerateButton";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { usePlanner } from "@/lib/store";
 import { Idea } from "@/lib/types";
-import { generateWithOpenAI } from "@/lib/ai";
+import { generateWithOpenAI, getGeneratedRows } from "@/lib/ai";
 
 export default function IdeasPage() {
   const { state, setState } = usePlanner();
 
   function add(row?: Partial<Idea>) {
+    const { id: _id, ...safeRow } = row || {};
     setState((prev) => ({
       ...prev,
-      ideas: [...prev.ideas, { id: crypto.randomUUID(), audience: prev.audience[0]?.name || "", source: "", clientPhrase: "", hiddenPain: "", meaning: "", topic: "", format: "Пост", rubric: "", huntStage: "Ищет решение", functionType: "Польза", ...row }]
+      ideas: [...prev.ideas, { audience: prev.audience[0]?.name || "", source: "", clientPhrase: "", hiddenPain: "", meaning: "", topic: "", format: "Пост", rubric: "", huntStage: "Ищет решение", functionType: "Польза", ...safeRow, id: crypto.randomUUID() }]
     }));
   }
 
-  async function autoFill() {
-    const rows = await generateWithOpenAI({ state, task: "Сгенерируй банк идей из продукта, ЦА и рубрик", count: 10 });
-    rows.forEach((row: Partial<Idea>) => add(row));
+  async function autoFill(count: number) {
+    const result = await generateWithOpenAI({ state, task: "Сгенерируй банк идей из продукта, ЦА и рубрик", count });
+    getGeneratedRows<Idea>(result, ["ideas", "идеи"]).forEach((row) => add(row));
   }
 
   return (
@@ -30,7 +32,7 @@ export default function IdeasPage() {
         subtitle="Здесь хранятся фразы клиентов, скрытые боли, смыслы и темы. Это сырье для рубрик и контент-плана."
         actions={
           <>
-            <button className="btn btn-outline rounded-lg gap-2" onClick={autoFill}><Wand2 size={16} />+10 с ИИ</button>
+            <AiGenerateButton defaultCount={3} max={50} onGenerate={autoFill} />
             <Link className="btn btn-primary rounded-lg gap-2" href="/ideas/edit"><Plus size={16} />Добавить</Link>
           </>
         }
