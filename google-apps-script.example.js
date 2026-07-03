@@ -22,6 +22,9 @@ function doPost(e) {
 }
 
 function sync_(state) {
+  if (!hasMeaningfulContent_(state)) {
+    throw new Error("Sync rejected: the project contains no meaningful content.");
+  }
   const spreadsheet = SpreadsheetApp.getActive();
   writeRows_(spreadsheet, SHEETS.product, [[
     state.product.name,
@@ -35,6 +38,17 @@ function sync_(state) {
   writeRows_(spreadsheet, SHEETS.ideas, state.ideas.map((x) => [x.id, x.audience, x.source, x.clientPhrase, x.hiddenPain, x.meaning, x.topic, x.format, x.rubric, x.huntStage, x.functionType]));
   writeRows_(spreadsheet, SHEETS.publications, state.publications.map((x) => [x.id, x.publishDate, x.publishTime, x.weekday, x.platform, x.audience, x.rubric, x.functionType, x.format, x.topic, x.hook, x.theses, x.cta, x.offer, x.status]));
   return { ok: true };
+}
+
+function hasMeaningfulContent_(state) {
+  const product = state.product || {};
+  const hasProduct = [product.name, product.positioning, product.usp, product.competitorPositioning, product.offer]
+    .some((value) => String(value || "").trim());
+  const hasAudience = (state.audience || []).some((item) => [item.name, item.description, item.pains, item.clientWords]
+    .some((value) => String(value || "").trim()));
+  const hasRubrics = (state.rubrics || []).some((item) => [item.name, item.task, item.segment]
+    .some((value) => String(value || "").trim()));
+  return hasProduct || hasAudience || hasRubrics || (state.ideas || []).length > 0 || (state.publications || []).length > 0;
 }
 
 function writeRows_(spreadsheet, sheetName, rows) {

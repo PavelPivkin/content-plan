@@ -1,19 +1,18 @@
 "use client";
 
-import { Download, RefreshCw, Upload } from "lucide-react";
+import { Download, DownloadCloud, Upload, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 import { usePlanner } from "@/lib/store";
-import { syncToSheets } from "@/lib/integrations";
 import { Settings } from "@/lib/types";
 
 export function SettingsPanel() {
-  const { state, setState, projects, activeProjectId, syncStatus, syncNow } = usePlanner();
+  const { state, updateSettings, projects, activeProjectId, syncStatus, publishNow, pullNow } = usePlanner();
   const [message, setMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeProject = projects.find((project) => project.id === activeProjectId);
 
   function update(key: keyof typeof state.settings, value: string) {
-    setState((prev) => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
+    updateSettings({ [key]: value });
   }
 
   function exportSettings() {
@@ -37,7 +36,7 @@ export function SettingsPanel() {
         if (typeof parsed[key] === "string") acc[key] = parsed[key];
         return acc;
       }, {});
-      setState((prev) => ({ ...prev, settings: { ...prev.settings, ...next } }));
+      updateSettings(next);
       setMessage("Настройки интеграций загружены и сохранены локально.");
     } catch {
       setMessage("Не удалось прочитать JSON с настройками интеграций.");
@@ -46,10 +45,24 @@ export function SettingsPanel() {
     }
   }
 
-  async function sync() {
-    setMessage("Синхронизирую...");
-    await syncNow();
-    setMessage("Ручная синхронизация выполнена.");
+  async function publish() {
+    setMessage("Публикую в Google Таблицу...");
+    try {
+      await publishNow();
+      setMessage("Данные опубликованы в Google Таблицу.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось опубликовать данные.");
+    }
+  }
+
+  async function pull() {
+    setMessage("Загружаю из Google Таблицы...");
+    try {
+      await pullNow();
+      setMessage("Данные загружены из Google Таблицы.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось загрузить данные.");
+    }
   }
 
   return (
@@ -86,9 +99,13 @@ export function SettingsPanel() {
         </label>
       </div>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <button className="btn btn-primary rounded-lg gap-2" onClick={sync}>
-          <RefreshCw size={16} />
-          {syncStatus.syncing ? "Синхронизирую..." : "Синхронизировать"}
+        <button className="btn btn-outline rounded-lg gap-2" onClick={pull} disabled={syncStatus.syncing}>
+          <DownloadCloud size={16} />
+          Pull
+        </button>
+        <button className="btn btn-primary rounded-lg gap-2" onClick={publish} disabled={syncStatus.syncing}>
+          <UploadCloud size={16} />
+          Publish
         </button>
         <button className="btn btn-outline rounded-lg gap-2" onClick={exportSettings}>
           <Download size={16} />
@@ -102,10 +119,9 @@ export function SettingsPanel() {
         <span className="text-sm text-neutral/60">{message}</span>
       </div>
       <div className="mt-4 rounded-xl border border-base-300/70 bg-base-100/75 p-4 text-sm leading-6 text-neutral/70">
-        <b>Автосинхронизация:</b>{" "}
-        {state.settings.appsScriptUrl ? "включена, если есть изменения, отправка идет раз в 30 секунд." : "добавьте Apps Script Web App URL, чтобы включить."}
+        <b>Ручная синхронизация.</b> Pull загружает данные из таблицы, Publish полностью заменяет данные в таблице текущим проектом.
         <br />
-        <span>{syncStatus.dirty ? "Есть несинхронизированные изменения." : "Локальные изменения синхронизированы."}</span>
+        <span>{syncStatus.dirty ? "Есть локальные изменения, которые ещё не опубликованы." : "Локальных неопубликованных изменений нет."}</span>
         {syncStatus.lastSyncedAt && <span> Последняя синхронизация: {syncStatus.lastSyncedAt}.</span>}
         {syncStatus.error && <div className="mt-2 text-error">{syncStatus.error}</div>}
       </div>

@@ -2,16 +2,16 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { createDefaultState, defaultState } from "./defaults";
-import { PlannerState, Project, Workspace } from "./types";
-import { syncToSheets } from "./integrations";
+import { PlannerState, Project, Settings, Workspace } from "./types";
+import { pullFromSheets, syncToSheets } from "./integrations";
 
 const LEGACY_STORAGE_KEY = "content-marketing-planner:v1";
 const WORKSPACE_STORAGE_KEY = "content-marketing-planner:workspace:v2";
-const AUTOSYNC_INTERVAL_MS = 30000;
 
 type Store = {
   state: PlannerState;
   setState: React.Dispatch<React.SetStateAction<PlannerState>>;
+  updateSettings: (settings: Partial<Settings>) => void;
   projects: Project[];
   activeProjectId: string;
   createProject: (name: string) => string;
@@ -26,7 +26,8 @@ type Store = {
     lastSyncedAt: string;
     error: string;
   };
-  syncNow: () => Promise<void>;
+  publishNow: () => Promise<void>;
+  pullNow: () => Promise<void>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -135,6 +136,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [workspace.activeProjectId]
   );
 
+  const updateSettings = useCallback((settings: Partial<Settings>) => {
+    const projectId = workspace.activeProjectId;
+    setWorkspace((prev) => ({
+      ...prev,
+      projects: prev.projects.map((project) => project.id === projectId
+        ? {
+            ...project,
+            state: { ...project.state, settings: { ...project.state.settings, ...settings } },
+            updatedAt: new Date().toISOString()
+          }
+        : project)
+    }));
+  }, [workspace.activeProjectId]);
+
   function createProject(name: string) {
     const project = makeProject(name);
     setWorkspace((prev) => ({ ...prev, activeProjectId: project.id, projects: [...prev.projects, project] }));
@@ -181,7 +196,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   async function syncProject(projectId: string) {
     const project = workspace.projects.find((candidate) => candidate.id === projectId);
-    if (!project?.state.settings.appsScriptUrl || syncingProjectId) return;
+    if (!project?.state.settings.appsScriptUrl) {
+      throw new Error("Для Publish нужен Apps Script Web App URL.");
+    }
+    if (syncingProjectId) throw new Error("Дождитесь завершения текущей операции.");
     setSyncingProjectId(projectId);
     setErrors((prev) => ({ ...prev, [projectId]: "" }));
     try {
@@ -193,34 +211,55 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       setLastSyncedAt((prev) => ({ ...prev, [projectId]: new Date().toLocaleString("ru-RU") }));
     } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : "Ошибка публикации в Google Sheets";
       setErrors((prev) => ({
         ...prev,
-        [projectId]: syncError instanceof Error ? syncError.message : "Ошибка автосинхронизации"
+        [projectId]: message
       }));
+      throw syncError;
     } finally {
       setSyncingProjectId("");
     }
   }
 
-  async function syncNow() {
+  async function publishNow() {
     await syncProject(workspace.activeProjectId);
   }
 
   const activeDirty = dirtyProjectIds.has(workspace.activeProjectId);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (syncingProjectId) return;
-      const nextProject = workspace.projects.find((project) => dirtyProjectIds.has(project.id) && project.state.settings.appsScriptUrl);
-      if (nextProject) void syncProject(nextProject.id);
-    }, AUTOSYNC_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [dirtyProjectIds, syncingProjectId, workspace]);
+  async function pullNow() {
+    const projectId = workspace.activeProjectId;
+    setSyncingProjectId(projectId);
+    setErrors((prev) => ({ ...prev, [projectId]: "" }));
+    try {
+      const pulledState = await pullFromSheets(state);
+      setWorkspace((prev) => ({
+        ...prev,
+        projects: prev.projects.map((project) => project.id === projectId
+          ? { ...project, state: pulledState, updatedAt: new Date().toISOString() }
+          : project)
+      }));
+      setDirtyProjectIds((prev) => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+      setLastSyncedAt((prev) => ({ ...prev, [projectId]: new Date().toLocaleString("ru-RU") }));
+    } catch (pullError) {
+      const message = pullError instanceof Error ? pullError.message : "Ошибка загрузки из Google Sheets";
+      setErrors((prev) => ({ ...prev, [projectId]: message }));
+      throw pullError;
+    } finally {
+      setSyncingProjectId("");
+    }
+  }
 
   const value = useMemo<Store>(
     () => ({
       state,
       setState,
+      updateSettings,
       projects: workspace.projects,
       activeProjectId: workspace.activeProjectId,
       createProject,
@@ -235,9 +274,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         lastSyncedAt: lastSyncedAt[workspace.activeProjectId] || "",
         error: errors[workspace.activeProjectId] || ""
       },
-      syncNow
+      publishNow,
+      pullNow
     }),
-    [state, setState, workspace, activeDirty, syncingProjectId, lastSyncedAt, errors]
+    [state, setState, updateSettings, workspace, activeDirty, syncingProjectId, lastSyncedAt, errors]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
