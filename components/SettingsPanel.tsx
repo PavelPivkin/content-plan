@@ -119,7 +119,7 @@ export function SettingsPanel() {
         <span className="text-sm text-neutral/60">{message}</span>
       </div>
       <div className="mt-4 rounded-xl border border-base-300/70 bg-base-100/75 p-4 text-sm leading-6 text-neutral/70">
-        <b>Ручная синхронизация.</b> Pull загружает данные из таблицы, Publish полностью заменяет данные в таблице текущим проектом.
+        <b>Синхронизация.</b> Pull загружает данные из таблицы, Publish сразу отправляет текущий проект. Изменения контента также публикуются автоматически через 30 секунд.
         <br />
         <span>{syncStatus.dirty ? "Есть локальные изменения, которые ещё не опубликованы." : "Локальных неопубликованных изменений нет."}</span>
         {syncStatus.lastSyncedAt && <span> Последняя синхронизация: {syncStatus.lastSyncedAt}.</span>}

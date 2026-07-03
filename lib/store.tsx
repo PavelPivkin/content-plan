@@ -7,6 +7,7 @@ import { pullFromSheets, syncToSheets } from "./integrations";
 
 const LEGACY_STORAGE_KEY = "content-marketing-planner:v1";
 const WORKSPACE_STORAGE_KEY = "content-marketing-planner:workspace:v2";
+const AUTOSYNC_INTERVAL_MS = 30000;
 
 type Store = {
   state: PlannerState;
@@ -254,6 +255,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setSyncingProjectId("");
     }
   }
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = window.setInterval(() => {
+      if (syncingProjectId) return;
+      const project = workspace.projects.find((candidate) =>
+        dirtyProjectIds.has(candidate.id) && candidate.state.settings.appsScriptUrl
+      );
+      if (project) void syncProject(project.id).catch(() => undefined);
+    }, AUTOSYNC_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [dirtyProjectIds, hydrated, syncingProjectId, workspace]);
 
   const value = useMemo<Store>(
     () => ({
