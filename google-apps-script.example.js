@@ -22,6 +22,16 @@ function doPost(e) {
   return json({ ok: false, error: "Unknown action" });
 }
 
+function doGet(e) {
+  const action = e.parameter.action;
+  const callback = e.parameter.callback || "callback";
+  if (action !== "pull" || !/^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback)) {
+    return ContentService.createTextOutput("Invalid request").setMimeType(ContentService.MimeType.TEXT);
+  }
+  const payload = JSON.stringify({ ok: true, state: pull_() });
+  return ContentService.createTextOutput(`${callback}(${payload});`).setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
 function pull_() {
   const spreadsheet = SpreadsheetApp.getActive();
   const product = readRows_(spreadsheet, SHEETS.product)[0] || [];

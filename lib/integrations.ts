@@ -95,15 +95,10 @@ async function readGoogleError(response: Response) {
 }
 
 async function pullViaAppsScript(state: PlannerState, sheetsError: string): Promise<PlannerState> {
-  const response = await fetch(state.settings.appsScriptUrl, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action: "pull" })
-  });
-  if (!response.ok) {
-    throw new Error(`Sheets API отклонил запрос: ${sheetsError}. Apps Script Pull: ${response.status}. Проверьте deployment Web App.`);
-  }
-  const payload = await response.json() as { ok?: boolean; state?: PlannerState; error?: string };
+  const payload = await requestAppsScriptJsonp(state.settings.appsScriptUrl)
+    .catch(() => {
+      throw new Error(`Sheets API отклонил запрос: ${sheetsError}. Apps Script Pull недоступен. Обновите код и deployment Web App.`);
+    });
   if (!payload.ok || !payload.state) {
     throw new Error("Apps Script ещё не поддерживает Pull. Обновите код скрипта и создайте новую версию deployment.");
   }
@@ -112,6 +107,28 @@ async function pullViaAppsScript(state: PlannerState, sheetsError: string): Prom
     publications: (payload.state.publications || []).map((publication) => ({ ...publication, ideaId: publication.ideaId || "", hook: publication.hook || "" })),
     settings: state.settings
   };
+}
+
+function requestAppsScriptJsonp(appsScriptUrl: string) {
+  return new Promise<{ ok?: boolean; state?: PlannerState; error?: string }>((resolve, reject) => {
+    const callbackName = `contentLabPull_${crypto.randomUUID().replaceAll("-", "")}`;
+    const script = document.createElement("script");
+    const timer = window.setTimeout(() => finish(() => reject(new Error("Apps Script Pull timeout"))), 15000);
+    const callbacks = window as unknown as Record<string, (payload: { ok?: boolean; state?: PlannerState; error?: string }) => void>;
+
+    function finish(action: () => void) {
+      window.clearTimeout(timer);
+      script.remove();
+      delete callbacks[callbackName];
+      action();
+    }
+
+    callbacks[callbackName] = (payload) => finish(() => resolve(payload));
+    script.onerror = () => finish(() => reject(new Error("Apps Script Pull failed")));
+    const separator = appsScriptUrl.includes("?") ? "&" : "?";
+    script.src = `${appsScriptUrl}${separator}action=pull&callback=${encodeURIComponent(callbackName)}`;
+    document.head.appendChild(script);
+  });
 }
 
 export async function createCalendarTask(state: PlannerState, publication: Publication) {
