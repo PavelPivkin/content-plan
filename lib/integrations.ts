@@ -36,7 +36,7 @@ export async function syncToSheets(state: PlannerState) {
 }
 
 export async function pullFromSheets(state: PlannerState): Promise<PlannerState> {
-  const { spreadsheetId, googleApiKey } = state.settings;
+  const { spreadsheetId, googleApiKey, appsScriptUrl } = state.settings;
   if (!spreadsheetId || !googleApiKey) {
     throw new Error("Для Pull нужны Google Spreadsheet ID и Google API key для чтения.");
   }
@@ -44,7 +44,11 @@ export async function pullFromSheets(state: PlannerState): Promise<PlannerState>
   const ranges = sheetTabs.map((tab) => `ranges=${encodeURIComponent(`'${tab.name}'!A:Z`)}`).join("&");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchGet?${ranges}&key=${encodeURIComponent(googleApiKey)}`;
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Sheets pull failed: ${response.status}`);
+  if (!response.ok) {
+    const details = await readGoogleError(response);
+    if (response.status === 403 && appsScriptUrl) return pullViaAppsScript(state, details);
+    throw new Error(`Sheets Pull: ${response.status}. ${details}`);
+  }
   const payload = await response.json() as { valueRanges?: Array<{ values?: unknown[][] }> };
   const values = payload.valueRanges?.map((range) => range.values || []) || [];
   const rows = (index: number) => values[index]?.slice(1) || [];
@@ -78,6 +82,35 @@ export async function pullFromSheets(state: PlannerState): Promise<PlannerState>
       offer: text(row, 13), status: (text(row, 14) || "Черновик") as Status
     })),
     settings: { ...defaults.settings, ...state.settings }
+  };
+}
+
+async function readGoogleError(response: Response) {
+  try {
+    const payload = await response.json() as { error?: { message?: string } };
+    return payload.error?.message || response.statusText;
+  } catch {
+    return response.statusText;
+  }
+}
+
+async function pullViaAppsScript(state: PlannerState, sheetsError: string): Promise<PlannerState> {
+  const response = await fetch(state.settings.appsScriptUrl, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "pull" })
+  });
+  if (!response.ok) {
+    throw new Error(`Sheets API отклонил запрос: ${sheetsError}. Apps Script Pull: ${response.status}. Проверьте deployment Web App.`);
+  }
+  const payload = await response.json() as { ok?: boolean; state?: PlannerState; error?: string };
+  if (!payload.ok || !payload.state) {
+    throw new Error("Apps Script ещё не поддерживает Pull. Обновите код скрипта и создайте новую версию deployment.");
+  }
+  return {
+    ...payload.state,
+    publications: (payload.state.publications || []).map((publication) => ({ ...publication, ideaId: publication.ideaId || "", hook: publication.hook || "" })),
+    settings: state.settings
   };
 }
 
