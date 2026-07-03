@@ -36,7 +36,7 @@ export async function syncToSheets(state: PlannerState) {
 }
 
 export async function pullFromSheets(state: PlannerState): Promise<PlannerState> {
-  const { spreadsheetId, googleApiKey, appsScriptUrl } = state.settings;
+  const { spreadsheetId, googleApiKey } = state.settings;
   if (!spreadsheetId || !googleApiKey) {
     throw new Error("Для Pull нужны Google Spreadsheet ID и Google API key для чтения.");
   }
@@ -46,7 +46,6 @@ export async function pullFromSheets(state: PlannerState): Promise<PlannerState>
   const response = await fetch(url);
   if (!response.ok) {
     const details = await readGoogleError(response);
-    if (response.status === 403 && appsScriptUrl) return pullViaAppsScript(state, details);
     throw new Error(`Sheets Pull: ${response.status}. ${details}`);
   }
   const payload = await response.json() as { valueRanges?: Array<{ values?: unknown[][] }> };
@@ -92,43 +91,6 @@ async function readGoogleError(response: Response) {
   } catch {
     return response.statusText;
   }
-}
-
-async function pullViaAppsScript(state: PlannerState, sheetsError: string): Promise<PlannerState> {
-  const payload = await requestAppsScriptJsonp(state.settings.appsScriptUrl)
-    .catch(() => {
-      throw new Error(`Sheets API отклонил запрос: ${sheetsError}. Apps Script Pull недоступен. Обновите код и deployment Web App.`);
-    });
-  if (!payload.ok || !payload.state) {
-    throw new Error("Apps Script ещё не поддерживает Pull. Обновите код скрипта и создайте новую версию deployment.");
-  }
-  return {
-    ...payload.state,
-    publications: (payload.state.publications || []).map((publication) => ({ ...publication, ideaId: publication.ideaId || "", hook: publication.hook || "" })),
-    settings: state.settings
-  };
-}
-
-function requestAppsScriptJsonp(appsScriptUrl: string) {
-  return new Promise<{ ok?: boolean; state?: PlannerState; error?: string }>((resolve, reject) => {
-    const callbackName = `contentLabPull_${crypto.randomUUID().replaceAll("-", "")}`;
-    const script = document.createElement("script");
-    const timer = window.setTimeout(() => finish(() => reject(new Error("Apps Script Pull timeout"))), 15000);
-    const callbacks = window as unknown as Record<string, (payload: { ok?: boolean; state?: PlannerState; error?: string }) => void>;
-
-    function finish(action: () => void) {
-      window.clearTimeout(timer);
-      script.remove();
-      delete callbacks[callbackName];
-      action();
-    }
-
-    callbacks[callbackName] = (payload) => finish(() => resolve(payload));
-    script.onerror = () => finish(() => reject(new Error("Apps Script Pull failed")));
-    const separator = appsScriptUrl.includes("?") ? "&" : "?";
-    script.src = `${appsScriptUrl}${separator}action=pull&callback=${encodeURIComponent(callbackName)}`;
-    document.head.appendChild(script);
-  });
 }
 
 export async function createCalendarTask(state: PlannerState, publication: Publication) {

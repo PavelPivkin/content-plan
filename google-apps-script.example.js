@@ -17,55 +17,8 @@ const HEADERS = {
 function doPost(e) {
   const payload = JSON.parse(e.postData.contents);
   if (payload.action === "calendar") return json(createCalendarEvent_(payload.calendarId, payload.publication));
-  if (payload.action === "pull") return json({ ok: true, state: pull_() });
   if (payload.action === "sync") return json(sync_(payload.state));
   return json({ ok: false, error: "Unknown action" });
-}
-
-function doGet(e) {
-  const action = e.parameter.action;
-  const callback = e.parameter.callback || "callback";
-  if (action !== "pull" || !/^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback)) {
-    return ContentService.createTextOutput("Invalid request").setMimeType(ContentService.MimeType.TEXT);
-  }
-  const payload = JSON.stringify({ ok: true, state: pull_() });
-  return ContentService.createTextOutput(`${callback}(${payload});`).setMimeType(ContentService.MimeType.JAVASCRIPT);
-}
-
-function pull_() {
-  const spreadsheet = SpreadsheetApp.getActive();
-  const product = readRows_(spreadsheet, SHEETS.product)[0] || [];
-  return {
-    product: {
-      name: text_(product[0]),
-      positioning: text_(product[1]),
-      usp: text_(product[2]),
-      competitorPositioning: text_(product[3]),
-      offer: text_(product[4])
-    },
-    audience: readRows_(spreadsheet, SHEETS.audience).map((x) => ({
-      id: text_(x[0]), name: text_(x[1]), description: text_(x[2]), huntStage: text_(x[3]), pains: text_(x[4]), clientWords: text_(x[5])
-    })),
-    rubrics: readRows_(spreadsheet, SHEETS.rubrics).map((x) => ({
-      id: text_(x[0]), name: text_(x[1]), task: text_(x[2]), functionType: text_(x[3]), formats: text_(x[4]), segment: text_(x[5]), active: x[6] === true || text_(x[6]).toLowerCase() === "true"
-    })),
-    ideas: readRows_(spreadsheet, SHEETS.ideas).map((x) => ({
-      id: text_(x[0]), audience: text_(x[1]), source: text_(x[2]), clientPhrase: text_(x[3]), hiddenPain: text_(x[4]), meaning: text_(x[5]), topic: text_(x[6]), format: text_(x[7]), rubric: text_(x[8]), huntStage: text_(x[9]), functionType: text_(x[10])
-    })),
-    publications: readRows_(spreadsheet, SHEETS.publications).map((x) => ({
-      id: text_(x[0]), ideaId: "", publishDate: text_(x[1]), publishTime: text_(x[2]), weekday: text_(x[3]), platform: text_(x[4]), audience: text_(x[5]), rubric: text_(x[6]), functionType: text_(x[7]), format: text_(x[8]), topic: text_(x[9]), hook: text_(x[10]), theses: text_(x[11]), cta: text_(x[12]), offer: text_(x[13]), status: text_(x[14])
-    }))
-  };
-}
-
-function readRows_(spreadsheet, sheetName) {
-  const sheet = spreadsheet.getSheetByName(sheetName);
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  return sheet.getRange(2, 1, sheet.getLastRow() - 1, HEADERS[sheetName].length).getValues();
-}
-
-function text_(value) {
-  return value == null ? "" : String(value);
 }
 
 function sync_(state) {
